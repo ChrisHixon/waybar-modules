@@ -1,13 +1,13 @@
 #!/usr/bin/env python3
 
-# custom waybar CPU usage graph module
+# custom waybar network usage graph module
 # - uses sparks font for bar graph
 # - outputs continuously, in json format
 # - updates every `interval` (seconds)
 # - allows changing attributes via arguments: --attr value
 #   (see attributes below)
 
-import psutil, sys, json, html, re
+import time, math, psutil, sys, json, html, re
 
 # default attributes/options:
 attr = {
@@ -15,9 +15,9 @@ attr = {
     'font_size': "30pt", # font-size in pt (seems close to height in pixels)i; width is ~2px per bar
     'letter_spacing': "-2048", # remove the gap between bars (~2px)
     'rise': "-4200", # adjust graph glyphs to align with characters like "|"
-    'css_class': "sparks-cpu", # css class for widget
+    'css_class': "sparks-net", # css class for widget
     'attributes': "", # additional attributes for pango <span>
-    'tooltip': 'CPU: {percent}%\n(avg: {avg}%, n={nsamples})', # tooltip text (limited replacement vars)
+    'tooltip': 'Net: {use}B/s / {use_bits}bit/s\n(avg: {avg}B/s / {avg_bits}bit/s, n={nsamples})', # tooltip text (limited replacement vars)
     'datapoints': 36, # total number of datapoints ("bars")
     'interval': 5, # sampling interval in seconds
 }
@@ -39,6 +39,22 @@ def sanitize_attrs(s):
         result.append(f'{key}="{safe_val}"')
 
     return ' '.join(result)
+
+# map bytes => bar height [0,100]): linear,log combo
+def map_combo(x):
+    if x < 0:
+        return 0
+    elif x <= 100_000:
+        return 55.5556 * x / 100_000
+    else:
+        return min(100, 100 * math.log(x) / math.log(1_000_000_000))
+
+def human(n):
+    for unit in ['', 'K', 'M', 'G', 'T', 'P']:
+        if abs(n) < 1000.0:
+            return f"{n:.1f}{unit}"
+        n /= 1000.0
+    return f"{n:.1f}E"
 
 # main
 
@@ -64,14 +80,22 @@ data = ["0"] * datapoints
 sample = 0
 nsamples = 0
 avg = 0
+smax = 0
+#decay = 0.95
+
+# get initial net counters
+c = psutil.net_io_counters()
+last = c.bytes_sent + c.bytes_recv
 
 # loop
 while True:
 
     # allow a limited substitution in tooltip
     tooltip_vars = {
-        'percent': f"{sample:.1f}",
-        'avg': f"{avg:.1f}",
+        'use': f"{human(sample)}",
+        'use_bits': f"{human(8 * sample)}",
+        'avg': f"{human(avg)}",
+        'avg_bits': f"{human(8 * avg)}",
         'nsamples': nsamples,
     }
     tooltip = attr['tooltip'].format_map(tooltip_vars)
@@ -86,11 +110,28 @@ while True:
     # note: waybar expects json output to be one line (no newlines)
     print(json.dumps(jsond), flush=True)
 
-    # sample cpu_percent over interval (seconds)
-    sample = psutil.cpu_percent(interval=interval)
+    # sample network use over interval (seconds)
+    time.sleep(interval)
+    c = psutil.net_io_counters()
+    total = c.bytes_sent + c.bytes_recv
+    sample = (total - last) / interval
 
     # update data and moving average
     nsamples = min(nsamples + 1, datapoints)
     avg = avg + (sample - avg) / nsamples
-    del data[0]; data.append(str(round(sample)))
+    last = total
+
+    # map bytes to graph range [0,100]
+
+    # log (I don't like this, exaggerates low-end)
+    #dval = min(100 * math.log(max(sample,1)) / math.log(1_000_000_000), 100)
+
+    # adaptive max (ok, but weird because scale is inconsistent)
+    #smax = max(sample, smax * decay, 100000)
+    #dval = (100 * sample / smax) if smax else 0
+
+    # linear,log combo
+    dval = map_combo(sample)
+
+    del data[0]; data.append(str(round(dval)))
 
