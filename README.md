@@ -1,11 +1,17 @@
 # waybar-modules
 Custom Waybar modules
 
-## gpu-graph-sparks
+## cpu-graph-sparks
 
 This custom waybar module uses Sparks sparkline fonts to display a cpu usage graph.
 
+## net-graph-sparks
+
+This custom waybar module uses Sparks sparkline fonts to display a network usage graph: total bytes written and read per second.
+
 ### Installation
+
+These instructions are written for `cpu-graph-sparks`. The instructions for `net-graph-sparks` are nearly identical; just change the name/id where necessary.
 
 Install prerequisites: `waybar`, `python3`, `python-psutil`, and desired Sparks fonts. Instructions to accomplish this vary per-distribution.
 
@@ -37,12 +43,15 @@ Further down in the file you'll find the section where each module is configured
 ```
     // Modules configuration
     "custom/cpu-graph-sparks": {
-        "exec": "/PATH/TO/cpu-graph-sparks --tooltip 'CPU: {percent}%' --attributes 'color=\"#0000ff\"'",
+        "exec": "/PATH/TO/cpu-graph-sparks",
         "return-type": "json"
     },
 ```
 
-Change the command line as necessary. Look over attributes (options) in the script source file (or see below). If you'd like to set/override any options, add the option(s) to the `"exec"` command line in the form `--attr value`
+Change the command line as necessary. Look over attributes (options) in the script source file (or see below). If you'd like to set/override any options, add the option(s) to the `"exec"` command line in the form `--attr value`; for example:
+```
+        "exec": "/PATH/TO/cpu-graph-sparks --tooltip 'CPU: {percent}%' --attributes 'color=\"#0000ff\"'",
+```
 
 ```
 # default attributes/options:
